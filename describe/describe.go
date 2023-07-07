@@ -2,12 +2,18 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/invertedv/chutils"
+	s "github.com/invertedv/chutils/sql"
 	"github.com/invertedv/describe"
 	"github.com/invertedv/utilities"
-	"math"
-	"time"
+	"strconv"
+	"strings"
+)
+
+const (
+	null = "NA"
 )
 
 func main() {
@@ -17,40 +23,42 @@ func main() {
 		maxGroupByDef = 4000000000
 	)
 
-	const (
-		defMs = "abcdefghijklmnopqrstuvwxyz"
-		defMf = 1e10
-		defMi = math.MinInt64
-		defMd = "19700101"
-	)
 	var (
 		conn *chutils.Connect
 		err  error
 	)
 
 	host := flag.String("host", "127.0.0.1", "string") // ClickHouse db
-	user := flag.String("user", "NA", "string")        // ClickHouse username
-	pw := flag.String("pw", "NA", "string")            // password for user
+	user := flag.String("user", null, "string")        // ClickHouse username
+	pw := flag.String("pw", null, "string")            // password for user
 
-	qry := flag.String("q", "NA", "string")
-	table := flag.String("t", "NA", "string")
+	runDetail := &describe.RunDef{}
 
-	pdf := flag.Bool("pdf", false, "bool")
-	outDir := flag.String("d", "NA", "string")
-	outFile := flag.String("f", "NA", "string")
+	runDetail.Qry = flag.String("q", null, "string")
+	runDetail.Table = flag.String("t", null, "string")
 
-	imgTypes := flag.String("i", "NA", "string")
+	runDetail.PDF = flag.Bool("pdf", false, "bool")
+	runDetail.OutDir = flag.String("d", null, "string")
+	runDetail.FileRoot = flag.String("f", null, "string")
 
-	mI := flag.Int64("mI", defMi, "int64")
-	mF := flag.Float64("mF", defMf, "float64")
-	mS := flag.String("mS", defMs, "string")
-	mD := flag.String("mD", defMd, "string")
+	runDetail.Show = flag.Bool("show", false, "bool")
+	runDetail.ImageTypes = flag.String("i", null, "string")
+
+	// values to recognize a field is missing
+	mI := flag.String("mI", null, "int64")
+	mF := flag.String("mF", null, "float64")
+	mS := flag.String("mS", null, "string")
+	mD := flag.String("mD", null, "string")
 
 	// ClickHouse options
 	maxMemory := flag.Int64("memory", maxMemoryDef, "int64")
 	maxGroupBy := flag.Int64("groupby", maxGroupByDef, "int64")
 
 	flag.Parse()
+
+	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, err = setMissing(mI, mF, mS, mD); err != nil {
+		panic(err)
+	}
 
 	if conn, err = chutils.NewConnect(*host, *user, *pw, clickhouse.Settings{
 		"max_memory_usage":                   *maxMemory,
@@ -60,26 +68,123 @@ func main() {
 	}
 	defer func() { _ = conn.Close() }()
 
-	qry := "SELECT * Except(lnID) FROM bk.final"
-	fds, e := describe.GetFields(qry, conn)
-	if e != nil {
+	if e := parseFlags(runDetail, conn); e != nil {
 		panic(e)
 	}
 
-	missInt, missFlt, missStr, missDt := -1, -1, "!", time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-	images := []utilities.PlotlyImage{utilities.PlotlyPNG, utilities.PlotlyHTML}
-	if e := describe.Table("bk.final", "/home/will/describe", images, fds, missStr, missInt, missFlt, missDt, conn); e != nil {
+	if e := describe.Drive(runDetail, conn); e != nil {
 		panic(e)
 	}
+}
 
-	// 1. -pdf: create a skeleton md with includes and then pandoc to pdf
-	// - describe -q "select purpose from bk.loan"   : into browser
-	// - describe -q "select * from bk.loan" -f png,html     <- check # of returns,
-	// - describe -t bk.loan -d /home/will/describe -pdf
+// -o: requires -i
+func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
+	// determine task
+	if *runDetail.Qry == null {
+		if *runDetail.Table == null {
+			return fmt.Errorf("both -q and -t cannot be omitted")
+		}
 
-	// -pdf can't use -html
-	// -mI, -mF, -mS, -mD
-	// -q  (query)
-	// -d  (output dir)
-	// -f  (file root name)
+		if *runDetail.FileRoot != null {
+			return fmt.Errorf("-f not valid with -t")
+		}
+
+		runDetail.Task = describe.TaskTable
+	}
+
+	if *runDetail.Qry != null {
+		if *runDetail.Table != null {
+			return fmt.Errorf("cannot have both -q and -t")
+		}
+
+		runDetail.Task = describe.TaskQuery
+
+		rdr := s.NewReader(*runDetail.Qry, conn)
+		defer func() { _ = rdr.Close() }()
+
+		if e := rdr.Init("", chutils.MergeTree); e != nil {
+			return e
+		}
+
+		runDetail.Fds = rdr.TableSpec().FieldDefs
+	}
+
+	// determine imageTypes (and show if no imageTypes)
+	for _, img := range strings.Split(strings.ReplaceAll(*runDetail.ImageTypes, " ", ""), ",") {
+		if img == null {
+			break
+		}
+
+		switch img {
+		case "png":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyPNG)
+		case "jpeg":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyJPEG)
+		case "html":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyHTML)
+		case "pdf":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyPDF)
+		case "wepb":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyWEBP)
+		case "eps":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyEPS)
+		case "emf":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlyEMF)
+		case "svg":
+			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlySVG)
+		default:
+			return fmt.Errorf("unknown image type: %s", img)
+		}
+	}
+
+	if runDetail.ImageTypesCh != nil {
+		if *runDetail.OutDir == null {
+			return fmt.Errorf("must have -o and -f if have -i")
+		}
+	}
+
+	if *runDetail.OutDir != null && runDetail.ImageTypesCh == nil {
+		return fmt.Errorf("must have -i if have -o")
+	}
+
+	// If there's no image type, then we must show to browswer
+	if runDetail.ImageTypesCh == nil {
+		*runDetail.Show = true
+	}
+
+	return nil
+}
+
+func checkNull(s *string) *string {
+	if *s == null {
+		return nil
+	}
+
+	return s
+}
+
+func setMissing(mI, mF, mS, mD *string) (missInt, missFlt, missStr, missDt any, err error) {
+	mI, mF, missStr, mD = checkNull(mI), checkNull(mF), *checkNull(mS), checkNull(mD)
+
+	if mF != nil {
+		if missFlt, err = strconv.ParseFloat(*mF, 64); err != nil {
+			return nil, nil, nil, nil, err
+		}
+	}
+
+	if mI != nil {
+		if missInt, err = strconv.ParseInt(*mI, 10, 64); err != nil {
+			return nil, nil, nil, nil, err
+		}
+	}
+
+	if mD != nil {
+		dt, e := utilities.Any2Date(*mD)
+		if e != nil {
+			return nil, nil, nil, nil, err
+		}
+		missDt = dt.Format("20060102")
+	}
+
+	return missInt, missFlt, missStr, missDt, nil
 }
