@@ -171,32 +171,10 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 
 		fld := field
 		if strings.Contains(fType, "Array") {
-			_, fld, _ = strings.Cut(field, ".")
+			array, field, _ := strings.Cut(field, ".")
+			// rename from array.field to array_field
+			fld = fmt.Sprintf("%s_%s", array, field)
 		}
-
-		/*		where := ""
-				var missing any
-				switch {
-				case strings.Contains(fType, "Int"):
-					missing = runDetail.MissInt
-				case strings.Contains(fType, "Float"):
-					missing = runDetail.MissFlt
-				case strings.Contains(fType, "String"):
-					missing = runDetail.MissStr
-				case strings.Contains(fType, "Date"):
-					missing = runDetail.MissDt
-				}
-
-				if missing != nil {
-					miss := utilities.ToClickHouse(missing)
-					oper := "!="
-
-					if strings.Contains(fType, "Float") {
-						oper = ">"
-					}
-
-					where = fmt.Sprintf("%s %s %s", fld, oper, miss)
-				}*/
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fld, fType)
 

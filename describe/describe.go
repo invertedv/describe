@@ -1,15 +1,17 @@
 package main
 
+// TODO: set defaults for missing
 import (
 	"flag"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/invertedv/chutils"
 	s "github.com/invertedv/chutils/sql"
 	"github.com/invertedv/describe"
 	"github.com/invertedv/utilities"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -45,10 +47,11 @@ func main() {
 	runDetail.ImageTypes = flag.String("i", null, "string")
 
 	// values to recognize a field is missing
-	mI := flag.String("mI", null, "int64")
-	mF := flag.String("mF", null, "float64")
-	mS := flag.String("mS", null, "string")
-	mD := flag.String("mD", null, "string")
+	mI := flag.String("mI", "-1", "int64")
+	mF := flag.String("mF", "-1", "float64")
+	mS := flag.String("mS", "!", "string")
+	mD := flag.String("mD", "19700101", "string")
+	noMiss := flag.Bool("miss", false, "bool")
 
 	// ClickHouse options
 	maxMemory := flag.Int64("memory", maxMemoryDef, "int64")
@@ -56,7 +59,7 @@ func main() {
 
 	flag.Parse()
 
-	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, err = setMissing(mI, mF, mS, mD); err != nil {
+	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, err = setMissing(mI, mF, mS, mD, *noMiss); err != nil {
 		panic(err)
 	}
 
@@ -163,7 +166,11 @@ func checkNull(s *string) *string {
 	return s
 }
 
-func setMissing(mI, mF, mS, mD *string) (missInt, missFlt, missStr, missDt any, err error) {
+func setMissing(mI, mF, mS, mD *string, noMiss bool) (missInt, missFlt, missStr, missDt any, err error) {
+	if noMiss {
+		return nil, nil, nil, nil, nil
+	}
+
 	mI, mF, missStr, mD = checkNull(mI), checkNull(mF), *checkNull(mS), checkNull(mD)
 
 	if mF != nil {
