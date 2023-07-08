@@ -2,19 +2,16 @@ package describe
 
 import (
 	"fmt"
-	"github.com/MetalBlueberry/go-plotly/offline"
 	"strings"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"github.com/dustin/go-humanize"
 	"github.com/invertedv/chutils"
-	s "github.com/invertedv/chutils/sql"
 	"github.com/invertedv/utilities"
 )
 
 // task is what we're asked to do:
-//   - taskSingle: describe one field
-//   - taskMultiple: describe more than one field but as a query, not a table
+//   - taskQuery: describe results of user-input query
 //   - taskTable: describe all the fields in a table
 type TaskType int
 
@@ -23,40 +20,37 @@ const (
 	TaskTable
 )
 
+// The RunDef struct holds the elements required to run describe
 type RunDef struct {
-	Task TaskType
+	Task TaskType // the kind of task to run
 
-	Show         *bool
-	ImageTypesCh []utilities.PlotlyImage
+	Show         *bool                   // if true, send the plots to the browser
+	ImageTypesCh []utilities.PlotlyImage // type(s) of image files to create
 
-	Qry   *string
-	Table *string
+	// one of these two must be specified
+	Qry   *string // query to pull data
+	Table *string // table to pull data
 
-	FileRoot *string
-	OutDir   *string
+	OutDir *string // directory for image files
 
-	ImageTypes *string
+	ImageTypes *string // types of images to create
 
-	MissStr, MissDt, MissInt, MissFlt any
+	MissStr, MissDt, MissInt, MissFlt any // values which indicate a field value is missing
 
-	PDF *bool
+	PDF *bool // if true, wrap up images into a pdf
 
-	Fds map[int]*chutils.FieldDef
+	Fds map[int]*chutils.FieldDef // field defs of query results
 }
 
-func GetFields(qry string, conn *chutils.Connect) (fields []*chutils.FieldDef, err error) {
-	rdr := s.NewReader(qry, conn)
-	if e := rdr.Init("", chutils.MergeTree); e != nil {
-		return nil, e
-	}
-
-	for _, fd := range rdr.TableSpec().FieldDefs {
-		fields = append(fields, fd)
-	}
-
-	return fields, nil
-}
-
+// FieldPlot builds the plot for a single field.
+//   - qry. Query to pull the data.
+//   - field. Field to keep from query.
+//   - plotType.  ("histogram" or "quantile")
+//   - outDir. Directory for output.
+//   - title. Title for plot.
+//   - imageTypes. Type(s) of images to produce.
+//   - show. If true, push plot to browser.
+//   - conn. Connector to ClickHouse.
 func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, imageTypes []utilities.PlotlyImage,
 	show bool, conn *chutils.Connect) error {
 	var fig *grob.Fig
@@ -74,6 +68,7 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 		ImageTypes: imageTypes,
 	}
 
+	// add where to query, subtitle
 	if where != "" {
 		pd.STitle = fmt.Sprintf("%s WHERE %s", qry, where)
 		// note: single quotes screw up js
@@ -119,7 +114,6 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
 	}
 
-	offline.ToHtml(fig, "/home/will/tmp/test.html")
 	if e := utilities.Plotter(fig, nil, pd); e != nil {
 		return e
 	}
@@ -127,6 +121,7 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 	return nil
 }
 
+// getWhere builds the where statement to eliminate missing values
 func getWhere(missInt, missFlt, missStr, missDt any, field, fType string) string {
 	where := ""
 	var missing any
@@ -155,6 +150,7 @@ func getWhere(missInt, missFlt, missStr, missDt any, field, fType string) string
 	return where
 }
 
+// Table generates plots for all the fields in the table.
 func Table(runDetail *RunDef, conn *chutils.Connect) error {
 	// get data types
 	fTypes, err := chutils.GetSystemFields(conn, "type", *runDetail.Table)
@@ -170,15 +166,20 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 		fmt.Println(field)
 
 		fld := field
+
+		// if the field is a nested array, we create an output name that has the form: <array>_<field>
 		if strings.Contains(fType, "Array") {
-			array, field, _ := strings.Cut(field, ".")
-			// rename from array.field to array_field
-			fld = fmt.Sprintf("%s_%s", array, field)
+			if array, fieldName, nested := strings.Cut(field, "."); nested {
+				// rename from array.field to array_field
+				fld = fmt.Sprintf("%s_%s", array, fieldName)
+			}
 		}
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fld, fType)
 
 		qry := fmt.Sprintf("SELECT %s FROM %s", field, *runDetail.Table)
+
+		// If the field is an array, we need to do an arrayJoin
 		if strings.Contains(fType, "Array") {
 			qry = fmt.Sprintf("SELECT arrayJoin(%s) AS %s FROM %s", field, fld, *runDetail.Table)
 		}

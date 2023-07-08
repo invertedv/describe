@@ -1,6 +1,5 @@
 package main
 
-// TODO: set defaults for missing
 import (
 	"flag"
 	"fmt"
@@ -41,7 +40,6 @@ func main() {
 
 	runDetail.PDF = flag.Bool("pdf", false, "bool")
 	runDetail.OutDir = flag.String("d", null, "string")
-	runDetail.FileRoot = flag.String("f", null, "string")
 
 	runDetail.Show = flag.Bool("show", false, "bool")
 	runDetail.ImageTypes = flag.String("i", null, "string")
@@ -53,11 +51,15 @@ func main() {
 	mD := flag.String("mD", "19700101", "string")
 	noMiss := flag.Bool("miss", false, "bool")
 
+	browser := flag.String("b", "xdg-open", "string")
+
 	// ClickHouse options
 	maxMemory := flag.Int64("memory", maxMemoryDef, "int64")
 	maxGroupBy := flag.Int64("groupby", maxGroupByDef, "int64")
 
 	flag.Parse()
+
+	utilities.Browser = *browser
 
 	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, err = setMissing(mI, mF, mS, mD, *noMiss); err != nil {
 		panic(err)
@@ -86,10 +88,6 @@ func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
 	if *runDetail.Qry == null {
 		if *runDetail.Table == null {
 			return fmt.Errorf("both -q and -t cannot be omitted")
-		}
-
-		if *runDetail.FileRoot != null {
-			return fmt.Errorf("-f not valid with -t")
 		}
 
 		runDetail.Task = describe.TaskTable
@@ -158,12 +156,12 @@ func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
 	return nil
 }
 
-func checkNull(s *string) *string {
-	if *s == null {
+func checkNull(str *string) *string {
+	if *str == null {
 		return nil
 	}
 
-	return s
+	return str
 }
 
 func setMissing(mI, mF, mS, mD *string, noMiss bool) (missInt, missFlt, missStr, missDt any, err error) {
