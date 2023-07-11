@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	null = "NA"
+	null = "NA" // default value for string flags
 )
 
 func main() {
@@ -38,7 +38,7 @@ func main() {
 	runDetail.Qry = flag.String("q", null, "string")
 	runDetail.Table = flag.String("t", null, "string")
 
-	runDetail.PDF = flag.Bool("pdf", false, "bool")
+	markDown := flag.String("markdown", null, "bool")
 	runDetail.OutDir = flag.String("d", null, "string")
 
 	runDetail.Show = flag.Bool("show", false, "bool")
@@ -61,33 +61,53 @@ func main() {
 
 	utilities.Browser = *browser
 
-	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, err = setMissing(mI, mF, mS, mD, *noMiss); err != nil {
+	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, runDetail.Markdown, err =
+		setMissing(mI, mF, mS, mD, markDown, *noMiss); err != nil {
 		panic(err)
 	}
 
-	if conn, err = chutils.NewConnect(*host, *user, *pw, clickhouse.Settings{
-		"max_memory_usage":                   *maxMemory,
-		"max_bytes_before_external_group_by": *maxGroupBy,
-	}); err != nil {
+	// parseFlags parses the user input to fully populate runDetail and return a ClickHouse connection, if needed.
+	if conn, err = parseFlags(runDetail, host, user, pw, maxMemory, maxGroupBy); err != nil {
 		panic(err)
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		if conn != nil {
+			_ = conn.Close()
+		}
+	}()
 
-	if e := parseFlags(runDetail, conn); e != nil {
+	// create graphs.
+	if e := describe.Drive(runDetail, conn); e != nil {
 		panic(e)
 	}
 
-	if e := describe.Drive(runDetail, conn); e != nil {
+	// create markdown file, if requested.
+	if e := describe.Markdown(runDetail); e != nil {
 		panic(e)
 	}
 }
 
-// -o: requires -i
-func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
+// parseFlags fully populates runDetail from the user input
+func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, maxGroupBy *int64) (*chutils.Connect, error) {
 	// determine task
+	if runDetail.Markdown != nil && *runDetail.Qry == null && *runDetail.Table == null {
+		// just make markdown file
+		runDetail.Task = describe.TaskNone
+		runDetail.OutDir = checkNull(runDetail.OutDir)
+		return nil, nil
+	}
+
+	conn, err := chutils.NewConnect(*host, *user, *pw, clickhouse.Settings{
+		"max_memory_usage":                   *maxMemory,
+		"max_bytes_before_external_group_by": *maxGroupBy,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	if *runDetail.Qry == null {
 		if *runDetail.Table == null {
-			return fmt.Errorf("both -q and -t cannot be omitted")
+			return nil, fmt.Errorf("both -q and -t cannot be omitted")
 		}
 
 		runDetail.Task = describe.TaskTable
@@ -95,7 +115,7 @@ func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
 
 	if *runDetail.Qry != null {
 		if *runDetail.Table != null {
-			return fmt.Errorf("cannot have both -q and -t")
+			return nil, fmt.Errorf("cannot have both -q and -t")
 		}
 
 		runDetail.Task = describe.TaskQuery
@@ -104,13 +124,13 @@ func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
 		defer func() { _ = rdr.Close() }()
 
 		if e := rdr.Init("", chutils.MergeTree); e != nil {
-			return e
+			return nil, e
 		}
 
 		runDetail.Fds = rdr.TableSpec().FieldDefs
 	}
 
-	// determine imageTypes (and show if no imageTypes)
+	// determine imageTypes
 	for _, img := range strings.Split(strings.ReplaceAll(*runDetail.ImageTypes, " ", ""), ",") {
 		if img == null {
 			break
@@ -134,26 +154,28 @@ func parseFlags(runDetail *describe.RunDef, conn *chutils.Connect) error {
 		case "svg":
 			runDetail.ImageTypesCh = append(runDetail.ImageTypesCh, utilities.PlotlySVG)
 		default:
-			return fmt.Errorf("unknown image type: %s", img)
+			return nil, fmt.Errorf("unknown image type: %s", img)
 		}
 	}
 
+	// if no -d is specified, use current working directory
 	if runDetail.ImageTypesCh != nil {
+		// place in current working directory if not specified
 		if *runDetail.OutDir == null {
-			return fmt.Errorf("must have -o and -f if have -i")
+			*runDetail.OutDir = "."
 		}
 	}
 
 	if *runDetail.OutDir != null && runDetail.ImageTypesCh == nil {
-		return fmt.Errorf("must have -i if have -o")
+		return nil, fmt.Errorf("must have -i if have -d")
 	}
 
-	// If there's no image type, then we must show to browswer
+	// If there's no image type, then we must show to browser
 	if runDetail.ImageTypesCh == nil {
 		*runDetail.Show = true
 	}
 
-	return nil
+	return conn, nil
 }
 
 func checkNull(str *string) *string {
@@ -164,32 +186,33 @@ func checkNull(str *string) *string {
 	return str
 }
 
-func setMissing(mI, mF, mS, mD *string, noMiss bool) (missInt, missFlt, missStr, missDt any, err error) {
+// setMissing sets up the missing values
+func setMissing(mI, mF, mS, mD, markDown *string, noMiss bool) (missInt, missFlt, missStr, missDt any, mark *string, err error) {
 	if noMiss {
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 
-	mI, mF, missStr, mD = checkNull(mI), checkNull(mF), *checkNull(mS), checkNull(mD)
+	mI, mF, missStr, mD, mark = checkNull(mI), checkNull(mF), *checkNull(mS), checkNull(mD), checkNull(markDown)
 
 	if mF != nil {
 		if missFlt, err = strconv.ParseFloat(*mF, 64); err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 	}
 
 	if mI != nil {
 		if missInt, err = strconv.ParseInt(*mI, 10, 64); err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 	}
 
 	if mD != nil {
 		dt, e := utilities.Any2Date(*mD)
 		if e != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		missDt = dt.Format("20060102")
 	}
 
-	return missInt, missFlt, missStr, missDt, nil
+	return missInt, missFlt, missStr, missDt, mark, nil
 }

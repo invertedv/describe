@@ -15,8 +15,8 @@ Describe depends on [orca](https://github.com/plotly/orca).
 ### Parameters
 
 #### ClickHouse credentials
-- user <user name>
-- pw <password>
+- -user <user name>
+- -pw <password>
 
 #### Source of the data. 
 
@@ -27,20 +27,19 @@ in the title of the plot.
 - -t \<db.table\>. Table name.
  
 #### Outputs
-- -i \<image type\>. Image types.  One or more of: png,jpeg,html,pdf.webp,svg,eps,emf.  If none is specified, the plot(s) are sent
+- -i \<image type\>. Image types.  One or more of: png, jpeg, html, pdf, webp, svg, eps, emf.  If none is specified, the plot(s) are sent
 to the browser.
-- -d - Directory.  Directory for output images.
+- -d - Directory.  Directory for output images. Defaults to the working directory.
 - -b \<browser\>. Browser for images. If omitted, the system default is used.
-- -show - If included, the plot is sent to the browser.
+- -show - If included, the plot is (also) sent to the browser. -show is assumed if -d and -i are omitted.
  
- 
-Images are placed in subdirectories of -d accroding to image type. For example, if you have
+ Images are placed in subdirectories of -d according to image type. For example, if you have
 
     -i png,html
 
 then two subdirectories are created - png and html - for images of the corresponding type.
 
-Filenames are the name of the field.
+Image filenames are the name of the field.
 
 #### Missing Values.
 By default, the results exclude values that indicate the data is missing.  Use -miss to disable this feature. 
@@ -51,19 +50,38 @@ By default, the results exclude values that indicate the data is missing.  Use -
 - -mD \<value\>. Value that indicates a missing data. Default: 19700101
 - -miss - If present, missing-value filter is disabled.
 
-- -pdf - If present, the graphs are bundled into a pdf.  pdf cannot use html input.
+- -markdown \<filename\> - If present, the graphs are bundled into a markdown file \<filename\>.  
+Requires -d parameter to point to the directory of images. If the input files are
+html, markdown uses links.  Otherwise, the graphs are included. From markdown, you can include it in
+a Jekyll (GitHub pages) site, or you can convert it to PDF.  If the -d path is relative, the links are
+relative. -markdown is run standalone, outside of creating the images. Why? Well, we'd have to add another
+flag to specify which image type to use.  
 
 #### Parameter Combinations
 
 1. -i requires -d
 2. -show is implied if -i is omitted.
-3. 
+3. If -d is omitted, -d is set to the working directory. 
 
 #### Examples
 
-describe -q "select purpose from bk.loan"   
-describe -q "select * from bk.loan" -i png,html
-describe -t bk.loan -d ~/describe -pdf
+
+    describe -q "select purpose from bk.loan" -user <user> -pw <pw>  
+
+Runs the query, sending the graph to the default browser.
+
+    describe -q "select * from bk.loan" -i png,html -user <user> -pw <pw>
+
+Runs the query, pulling all the fields from bk.loan.  Both png and html files are produced. These are placed in
+the current working directory. One could, instead, use:
+
+    describe -q bk.loan -i png,html -user <user> -pw <pw>
+
+which will include the field comments in the graphs.
+
+    describe -t bk.loan -d figs/png -markdown figs.md
+
+Creates a markdown file, figs.md, in the current working directory with the images in figs/png.
 
 #### Images
 

@@ -1,7 +1,18 @@
+// Package describe generates descriptive plots of ClickHouse tables and query results.
+// There are two types of images generated: histograms and quantile plots.
+// Quantile plots are generated for fields of type float.  Histograms are generated for
+// fields of type string, date and int.  If you want a quantile plot of an int field, cast it as float.
+//
+// Values deemed "missing" in a field may be omitted from a graph.
+//
+// In addition, there is a func to create a simple markdown file of the images created.
+//
+// The command in the describe subdirectory.
 package describe
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
@@ -10,17 +21,24 @@ import (
 	"github.com/invertedv/utilities"
 )
 
-// task is what we're asked to do:
-//   - taskQuery: describe results of user-input query
+// TaskType is what we're asked to do:
+//   - taskQuery: describe results of query
 //   - taskTable: describe all the fields in a table
 type TaskType int
 
 const (
-	TaskQuery TaskType = 0 + iota
+	TaskNone TaskType = 0 + iota
+	TaskQuery
 	TaskTable
 )
 
-// The RunDef struct holds the elements required to run describe
+const (
+	histogram = "histogram"
+	quantile  = "quantile"
+	SkipLevel = 1000 // a histogram isn't made if there are more than this many levels
+)
+
+// The RunDef struct holds the elements required to direct describe's activities.
 type RunDef struct {
 	Task TaskType // the kind of task to run
 
@@ -35,11 +53,11 @@ type RunDef struct {
 
 	ImageTypes *string // types of images to create
 
-	MissStr, MissDt, MissInt, MissFlt any // values which indicate a field value is missing
+	MissStr, MissDt, MissInt, MissFlt any // values which indicate a field value is missing. Ignored if nil.
 
-	PDF *bool // if true, wrap up images into a pdf
+	Markdown *string // if not nil, the name of a markdown file to create with the images in OutDir.
 
-	Fds map[int]*chutils.FieldDef // field defs of query results
+	Fds map[int]*chutils.FieldDef // field defs of query results (not required if describing a table).
 }
 
 // FieldPlot builds the plot for a single field.
@@ -81,7 +99,7 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 	}
 
 	switch plotType {
-	case "histogram":
+	case histogram:
 		var (
 			data *utilities.HistData
 			err  error
@@ -91,14 +109,14 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 			return err
 		}
 
-		if len(data.Levels) > 1000 {
-			fmt.Printf("skipped %s: > 1000 levels\n", field)
+		if len(data.Levels) > SkipLevel {
+			fmt.Printf("skipped %s: > %d levels\n", field, SkipLevel)
 			return nil
 		}
 
 		pd.XTitle, pd.Title, pd.YTitle = "Level", fmt.Sprintf("Histogram of %s<br>n: %s", pdTitle, humanize.Comma(data.Total)), "Proportion"
 		fig = data.Fig
-	case "quantile":
+	case quantile:
 		var (
 			data *utilities.QuantileData
 			err  error
@@ -159,9 +177,9 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 	}
 
 	for field, fType := range fTypes {
-		plotType := "histogram"
+		plotType := histogram
 		if strings.Contains(fType, "Float") {
-			plotType = "quantile"
+			plotType = quantile
 		}
 		fmt.Println(field)
 
@@ -200,15 +218,16 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 	return nil
 }
 
+// Multiple creates the graphs for a query (as opposed to a table)
 func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 	for ind := 0; ind < len(runDetail.Fds); ind++ {
 		fd := runDetail.Fds[ind]
-		plotType := "histogram"
+		plotType := histogram
 		if fd.ChSpec.Base == chutils.ChFloat {
-			plotType = "quantile"
+			plotType = quantile
 		}
 
-		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fmt.Sprintf("%v", fd.ChSpec.Base))
+		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fd.ChSpec.Base.String())
 
 		if e := FieldPlot(*runDetail.Qry, fd.Name, where, plotType, *runDetail.OutDir, fd.Name, "",
 			runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
@@ -219,12 +238,74 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 	return nil
 }
 
+// Drive runs the appropriate task
 func Drive(runDetail *RunDef, conn *chutils.Connect) error {
 	switch runDetail.Task {
 	case TaskTable:
 		return Table(runDetail, conn)
 	case TaskQuery:
 		return Multiple(runDetail, conn)
+	}
+
+	return nil
+}
+
+// Markdown creates a simple markdown file of the images in OutDir
+func Markdown(runDetail *RunDef) error {
+	if runDetail.Markdown == nil {
+		return nil
+	}
+
+	if runDetail.Task != TaskNone {
+		return fmt.Errorf("cannot create markdown in same run as image creation")
+	}
+
+	var (
+		mdFile *os.File
+		err    error
+	)
+
+	if mdFile, err = os.Create(*runDetail.Markdown); err != nil {
+		return err
+	}
+	defer func() { _ = mdFile.Close() }()
+
+	var outDir []os.DirEntry
+	var info os.FileInfo
+
+	if info, err = os.Stat(*runDetail.OutDir); err != nil {
+		return err
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", *runDetail.OutDir)
+	}
+
+	if outDir, err = os.ReadDir(*runDetail.OutDir); err != nil {
+		return err
+	}
+
+	for _, fig := range outDir {
+		file := "png/"
+		if runDetail.OutDir != nil {
+			file = fmt.Sprintf("%s%s", utilities.Slash(*runDetail.OutDir), fig.Name())
+		}
+		label, ext, _ := strings.Cut(fig.Name(), ".")
+
+		if !utilities.Has(ext, ",", "png,jpeg,html,pdf,webp,svg,eps,emf") {
+			continue
+		}
+
+		line := "### "
+		// if not html, insert image rather than a link
+		if !strings.Contains(fig.Name(), "html") {
+			line = "### !"
+		}
+
+		line = fmt.Sprintf("%s[%s](%s)\n", line, label, file)
+		if _, e := mdFile.WriteString(line); e != nil {
+			return e
+		}
 	}
 
 	return nil
