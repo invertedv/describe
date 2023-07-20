@@ -43,6 +43,7 @@ func main() {
 
 	runDetail.Show = flag.Bool("show", false, "bool")
 	runDetail.ImageTypes = flag.String("i", null, "string")
+	runDetail.XY = flag.Bool("xy", false, "bool")
 
 	// values to recognize a field is missing
 	mI := flag.String("mI", "-1", "int64")
@@ -119,6 +120,10 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 		}
 
 		runDetail.Task = describe.TaskQuery
+
+		if *runDetail.XY {
+			runDetail.Task = describe.TaskXY
+		}
 
 		rdr := s.NewReader(*runDetail.Qry, conn)
 		defer func() { _ = rdr.Close() }()

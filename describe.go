@@ -30,11 +30,13 @@ const (
 	TaskNone TaskType = 0 + iota
 	TaskQuery
 	TaskTable
+	TaskXY
 )
 
 const (
 	histogram = "histogram"
 	quantile  = "quantile"
+	xy        = "xy"
 	SkipLevel = 1000 // a histogram isn't made if there are more than this many levels
 )
 
@@ -48,6 +50,7 @@ type RunDef struct {
 	// one of these two must be specified
 	Qry   *string // query to pull data
 	Table *string // table to pull data
+	XY    *bool
 
 	OutDir *string // directory for image files
 
@@ -69,7 +72,7 @@ type RunDef struct {
 //   - imageTypes. Type(s) of images to produce.
 //   - show. If true, push plot to browser.
 //   - conn. Connector to ClickHouse.
-func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, imageTypes []utilities.PlotlyImage,
+func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title string, imageTypes []utilities.PlotlyImage,
 	show bool, conn *chutils.Connect) error {
 	var fig *grob.Fig
 
@@ -93,7 +96,7 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 		pd.STitle = strings.ReplaceAll(pd.STitle, "'", "`")
 	}
 
-	pdTitle := field
+	pdTitle := xField
 	if title != "" {
 		pdTitle = title
 	}
@@ -105,12 +108,12 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 			err  error
 		)
 
-		if data, err = utilities.NewHistData(qry, field, where, conn); err != nil {
+		if data, err = utilities.NewHistData(qry, xField, where, conn); err != nil {
 			return err
 		}
 
 		if len(data.Levels) > SkipLevel {
-			fmt.Printf("skipped %s: > %d levels\n", field, SkipLevel)
+			fmt.Printf("skipped %s: > %d levels\n", xField, SkipLevel)
 			return nil
 		}
 
@@ -122,11 +125,22 @@ func FieldPlot(qry, field, where, plotType, outDir, outFile, title string, image
 			err  error
 		)
 
-		if data, err = utilities.NewQuantileData(qry, field, where, conn); err != nil {
+		if data, err = utilities.NewQuantileData(qry, xField, where, conn); err != nil {
 			return err
 		}
 
-		pd.XTitle, pd.YTitle, pd.Title = "u", field, fmt.Sprintf("Quantile of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
+		pd.XTitle, pd.YTitle, pd.Title = "u", xField, fmt.Sprintf("Quantile of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
+		fig = data.Fig
+	case xy:
+		var (
+			data *utilities.XYData
+			err  error
+		)
+
+		if data, err = utilities.NewXYData(qry, xField, yField, where, conn); err != nil {
+			return err
+		}
+		pd.XTitle, pd.YTitle, pd.Title = xField, yField, fmt.Sprintf("XY plot of %s vs %s", xField, yField)
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
@@ -210,7 +224,7 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 			title = fmt.Sprintf("%s: %s", title, comment)
 		}
 
-		if e := FieldPlot(qry, fld, where, plotType, *runDetail.OutDir, fld, title, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		if e := FieldPlot(qry, fld, "", where, plotType, *runDetail.OutDir, fld, title, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 			return e
 		}
 	}
@@ -229,10 +243,36 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fd.ChSpec.Base.String())
 
-		if e := FieldPlot(*runDetail.Qry, fd.Name, where, plotType, *runDetail.OutDir, fd.Name, "",
+		if e := FieldPlot(*runDetail.Qry, fd.Name, "", where, plotType, *runDetail.OutDir, fd.Name, "",
 			runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 			return e
 		}
+	}
+
+	return nil
+}
+
+// XY creates an XY graphs for a query
+func XY(runDetail *RunDef, conn *chutils.Connect) error {
+	if len(runDetail.Fds) != 2 {
+		return fmt.Errorf("for xy plot, query must have only two columns")
+	}
+
+	// check data types??
+	xFd := runDetail.Fds[0]
+	xField := xFd.Name
+	xWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, xField, xFd.ChSpec.Base.String())
+
+	yFd := runDetail.Fds[1]
+	yField := yFd.Name
+	yWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, yField, yFd.ChSpec.Base.String())
+
+	where := fmt.Sprintf("%s AND %s", xWhere, yWhere)
+
+	outFile := fmt.Sprintf("%sVs%s", yField, xField)
+	if e := FieldPlot(*runDetail.Qry, xField, yField, where, "xy", *runDetail.OutDir, outFile, "",
+		runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		return e
 	}
 
 	return nil
@@ -245,6 +285,8 @@ func Drive(runDetail *RunDef, conn *chutils.Connect) error {
 		return Table(runDetail, conn)
 	case TaskQuery:
 		return Multiple(runDetail, conn)
+	case TaskXY:
+		return XY(runDetail, conn)
 	}
 
 	return nil

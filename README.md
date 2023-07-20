@@ -27,6 +27,8 @@ in the title of the plot.
 - -t \<db.table\>. Table name.
  
 #### Outputs
+- -xy.  If this flag is used, an XY plot is created. The input must be a query that returns exactly two fields.  The first
+  is x and the second is y.
 - -i \<image type\>. Image types.  One or more of: png, jpeg, html, pdf, webp, svg, eps, emf.  If none is specified, the plot(s) are sent
 to the browser.
 - -d - Directory.  Directory for output images. Defaults to the working directory.
@@ -82,6 +84,10 @@ which will include the field comments in the graphs.
     describe -t bk.loan -d figs/png -markdown figs.md
 
 Creates a markdown file, figs.md, in the current working directory with the images in figs/png.
+
+    describe -q 'select ltv, cltv from bk.loan' -xy -show
+
+produces a cross plot of cltv (y-axis) vs ltv (x-axis) in the default browser
 
 #### Images
 
