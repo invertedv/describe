@@ -1,8 +1,10 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -15,6 +17,11 @@ import (
 
 const (
 	null = "NA" // default value for string flags
+)
+
+var (
+	//go:embed helpString.txt
+	helpString string
 )
 
 func main() {
@@ -30,8 +37,8 @@ func main() {
 	)
 
 	host := flag.String("host", "127.0.0.1", "string") // ClickHouse db
-	user := flag.String("user", null, "string")        // ClickHouse username
-	pw := flag.String("pw", null, "string")            // password for user
+	user := flag.String("user", "NA", "string")        // ClickHouse username
+	pw := flag.String("pw", "NA", "string")            // password for user
 
 	runDetail := &describe.RunDef{}
 
@@ -43,7 +50,7 @@ func main() {
 
 	runDetail.Show = flag.Bool("show", false, "bool")
 	runDetail.ImageTypes = flag.String("i", null, "string")
-	runDetail.XY = flag.Bool("xy", false, "bool")
+	runDetail.XY = flag.String("xy", "NA", "bool")
 
 	// values to recognize a field is missing
 	mI := flag.String("mI", "-1", "int64")
@@ -51,6 +58,7 @@ func main() {
 	mS := flag.String("mS", "!", "string")
 	mD := flag.String("mD", "19700101", "string")
 	noMiss := flag.Bool("miss", false, "bool")
+	help := flag.Bool("h", false, "bool")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -59,6 +67,11 @@ func main() {
 	maxGroupBy := flag.Int64("groupby", maxGroupByDef, "int64")
 
 	flag.Parse()
+
+	if *user == "NA" || *help {
+		fmt.Println(helpString)
+		os.Exit(0)
+	}
 
 	utilities.Browser = *browser
 
@@ -121,7 +134,7 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 
 		runDetail.Task = describe.TaskQuery
 
-		if *runDetail.XY {
+		if *runDetail.XY != "NA" {
 			runDetail.Task = describe.TaskXY
 		}
 
@@ -132,7 +145,7 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 			return nil, e
 		}
 
-		runDetail.Fds = rdr.TableSpec().FieldDefs
+		runDetail.Fds = rdr.TableSpec()
 	}
 
 	// determine imageTypes

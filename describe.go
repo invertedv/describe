@@ -50,7 +50,7 @@ type RunDef struct {
 	// one of these two must be specified
 	Qry   *string // query to pull data
 	Table *string // table to pull data
-	XY    *bool
+	XY    *string
 
 	OutDir *string // directory for image files
 
@@ -60,7 +60,7 @@ type RunDef struct {
 
 	Markdown *string // if not nil, the name of a markdown file to create with the images in OutDir.
 
-	Fds map[int]*chutils.FieldDef // field defs of query results (not required if describing a table).
+	Fds *chutils.TableDef // field defs of query results (not required if describing a table).
 }
 
 // FieldPlot builds the plot for a single field.
@@ -234,8 +234,9 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 
 // Multiple creates the graphs for a query (as opposed to a table)
 func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
-	for ind := 0; ind < len(runDetail.Fds); ind++ {
-		fd := runDetail.Fds[ind]
+	fds := runDetail.Fds.FieldDefs
+	for ind := 0; ind < len(fds); ind++ {
+		fd := fds[ind]
 		plotType := histogram
 		if fd.ChSpec.Base == chutils.ChFloat {
 			plotType = quantile
@@ -254,17 +255,29 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 
 // XY creates an XY graphs for a query
 func XY(runDetail *RunDef, conn *chutils.Connect) error {
-	if len(runDetail.Fds) != 2 {
-		return fmt.Errorf("for xy plot, query must have only two columns")
+	flds := strings.SplitN(*runDetail.XY, ",", 2)
+	if len(flds) != 2 {
+		return fmt.Errorf("-XY must have two field names in quotes separated by a comma")
 	}
 
-	// check data types??
-	xFd := runDetail.Fds[0]
-	xField := xFd.Name
+	xField := strings.ReplaceAll(flds[0], " ", "")
+	yField := strings.ReplaceAll(flds[1], " ", "")
+
+	var (
+		xFd, yFd *chutils.FieldDef
+		e        error
+	)
+
+	if _, xFd, e = runDetail.Fds.Get(xField); e != nil {
+		return e
+	}
+
 	xWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, xField, xFd.ChSpec.Base.String())
 
-	yFd := runDetail.Fds[1]
-	yField := yFd.Name
+	if _, yFd, e = runDetail.Fds.Get(yField); e != nil {
+		return e
+	}
+
 	yWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, yField, yFd.ChSpec.Base.String())
 
 	where := fmt.Sprintf("%s AND %s", xWhere, yWhere)

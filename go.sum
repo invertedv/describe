@@ -45,8 +45,8 @@ github.com/invertedv/chutils v1.1.32 h1:pP7HVtCm4YTv/aj69GN9gUCxkohigqTJ5pVt078P
 github.com/invertedv/chutils v1.1.32/go.mod h1:jpb+VjPeWnZOauSRxL0z9eJVInJ+pfRvsA8mV6lMnWs=
 github.com/invertedv/keyval v0.0.15 h1:WycLsAHIhZ7HZOLJJBSPxV89IAmRGl96hkbp1Hnfqow=
 github.com/invertedv/keyval v0.0.15/go.mod h1:RxuvBp2jHXVN9g9pRod/zE7/6eD2gcNkYWkJ/Ac9YdE=
-github.com/invertedv/utilities v0.1.26 h1:IjRZEBSDrtxoiBMkYgAlX9VtUL3YVNEDVSTOkN3QcIw=
-github.com/invertedv/utilities v0.1.26/go.mod h1:NkD1GCcDpWERbGZrWeI2qTjkawCxmzYnxaRA6Wc1EnI=
+github.com/invertedv/utilities v0.1.27 h1:i7mMqR+v2cVk9WkriKK6XJtkMCBJ3GXpTUYY7+tq2GI=
+github.com/invertedv/utilities v0.1.27/go.mod h1:NkD1GCcDpWERbGZrWeI2qTjkawCxmzYnxaRA6Wc1EnI=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/compress v1.13.6/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
