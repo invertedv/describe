@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	s "github.com/invertedv/chutils/sql"
 	"github.com/invertedv/describe"
 	"github.com/invertedv/utilities"
+	"golang.org/x/term"
 )
 
 const (
@@ -37,8 +39,8 @@ func main() {
 	)
 
 	host := flag.String("host", "127.0.0.1", "string") // ClickHouse db
-	user := flag.String("user", "NA", "string")        // ClickHouse username
-	pw := flag.String("pw", "NA", "string")            // password for user
+	user := flag.String("user", null, "string")        // ClickHouse username
+	pw := flag.String("pw", null, "string")            // password for user
 
 	runDetail := &describe.RunDef{}
 
@@ -50,7 +52,7 @@ func main() {
 
 	runDetail.Show = flag.Bool("show", false, "bool")
 	runDetail.ImageTypes = flag.String("i", null, "string")
-	runDetail.XY = flag.String("xy", "NA", "bool")
+	runDetail.XY = flag.String("xy", null, "bool")
 
 	// values to recognize a field is missing
 	mI := flag.String("mI", "-1", "int64")
@@ -68,9 +70,17 @@ func main() {
 
 	flag.Parse()
 
-	if *user == "NA" || *help {
+	if *help {
 		fmt.Println(helpString)
 		os.Exit(0)
+	}
+
+	if *user == null {
+		*user = getValue("ClickHouse User: ")
+	}
+
+	if *pw == null {
+		*pw = getPW("Clickhouse Password: ")
 	}
 
 	utilities.Browser = *browser
@@ -134,7 +144,7 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 
 		runDetail.Task = describe.TaskQuery
 
-		if *runDetail.XY != "NA" {
+		if *runDetail.XY != null {
 			runDetail.Task = describe.TaskXY
 		}
 
@@ -233,4 +243,18 @@ func setMissing(mI, mF, mS, mD, markDown *string, noMiss bool) (missInt, missFlt
 	}
 
 	return missInt, missFlt, missStr, missDt, mark, nil
+}
+
+// getValue returns a value for the user
+func getValue(prompt string) string {
+	rdr := bufio.NewReader(os.Stdin)
+	fmt.Print(prompt)
+	txt, _ := rdr.ReadString('\n')
+	return strings.ReplaceAll(txt, "\n", "")
+}
+
+func getPW(prompt string) string {
+	fmt.Print(prompt)
+	pass, _ := term.ReadPassword(int(os.Stdin.Fd()))
+	return string(pass)
 }
