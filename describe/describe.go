@@ -31,6 +31,7 @@ func main() {
 	const (
 		maxMemoryDef  = 100000000000
 		maxGroupByDef = 4000000000
+		threadsDef    = 6
 	)
 
 	var (
@@ -68,6 +69,7 @@ func main() {
 	// ClickHouse options
 	maxMemory := flag.Int64("memory", maxMemoryDef, "int64")
 	maxGroupBy := flag.Int64("groupby", maxGroupByDef, "int64")
+	threads := flag.Int64("threads", threadsDef, "int64")
 
 	flag.Parse()
 	if *title != null {
@@ -95,7 +97,7 @@ func main() {
 	}
 
 	// parseFlags parses the user input to fully populate runDetail and return a ClickHouse connection, if needed.
-	if conn, err = parseFlags(runDetail, host, user, pw, maxMemory, maxGroupBy); err != nil {
+	if conn, err = parseFlags(runDetail, host, user, pw, maxMemory, maxGroupBy, threads); err != nil {
 		panic(err)
 	}
 	defer func() {
@@ -116,7 +118,7 @@ func main() {
 }
 
 // parseFlags fully populates runDetail from the user input
-func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, maxGroupBy *int64) (*chutils.Connect, error) {
+func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, maxGroupBy, threads *int64) (*chutils.Connect, error) {
 	// determine task
 	if runDetail.Markdown != nil && *runDetail.Qry == null && *runDetail.Table == null {
 		// just make markdown file
@@ -128,7 +130,9 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 	conn, err := chutils.NewConnect(*host, *user, *pw, clickhouse.Settings{
 		"max_memory_usage":                   *maxMemory,
 		"max_bytes_before_external_group_by": *maxGroupBy,
+		"max_threads":                        *threads,
 	})
+
 	if err != nil {
 		return nil, err
 	}

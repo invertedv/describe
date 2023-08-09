@@ -40,6 +40,8 @@ to the browser.
 - -d - Directory.  Directory for output images. Defaults to the working directory.
 - -b \<browser\>. Browser for images. If omitted, the system default is used.
 - -show - If included, the plot is (also) sent to the browser. -show is assumed if -d and -i are omitted.
+- -title - If included, the plots are titled with this value.
+- -threads - If included, maximum # of threads for ClickHouse to use.
  
  Images are placed in subdirectories of -d according to image type. For example, if you have
 
