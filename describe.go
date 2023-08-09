@@ -52,6 +52,8 @@ type RunDef struct {
 	Table *string // table to pull data
 	XY    *string
 
+	Title *string
+
 	OutDir *string // directory for image files
 
 	ImageTypes *string // types of images to create
@@ -117,7 +119,11 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title stri
 			return nil
 		}
 
-		pd.XTitle, pd.Title, pd.YTitle = "Level", fmt.Sprintf("Histogram of %s<br>n: %s", pdTitle, humanize.Comma(data.Total)), "Proportion"
+		if title == "" {
+			title = fmt.Sprintf("Histogram of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
+		}
+
+		pd.XTitle, pd.YTitle, pd.Title = "Level", "Proportion", title
 		fig = data.Fig
 	case quantile:
 		var (
@@ -129,7 +135,11 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title stri
 			return err
 		}
 
-		pd.XTitle, pd.YTitle, pd.Title = "u", xField, fmt.Sprintf("Quantile of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
+		if title == "" {
+			title = fmt.Sprintf("Quantile of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
+		}
+
+		pd.XTitle, pd.YTitle, pd.Title = "u", xField, title
 		fig = data.Fig
 	case xy:
 		var (
@@ -140,7 +150,11 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title stri
 		if data, err = utilities.NewXYData(qry, xField, yField, where, conn); err != nil {
 			return err
 		}
-		pd.XTitle, pd.YTitle, pd.Title = xField, yField, fmt.Sprintf("XY plot of %s vs %s", xField, yField)
+		if title == "" {
+			title = fmt.Sprintf("XY plot of %s vs %s", xField, yField)
+		}
+
+		pd.XTitle, pd.YTitle, pd.Title = xField, yField, title
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
@@ -216,12 +230,17 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 			qry = fmt.Sprintf("SELECT arrayJoin(%s) AS %s FROM %s", field, fld, *runDetail.Table)
 		}
 
-		title := field
-
+		var title string
 		// add the comment to the title
 		comment, _ := chutils.GetSystemField(*runDetail.Table, "comment", field, conn)
-		if comment != "" {
+
+		switch {
+		case *runDetail.Title != "":
+			title = *runDetail.Title
+		case comment != "":
 			title = fmt.Sprintf("%s: %s", title, comment)
+		default:
+			title = field
 		}
 
 		if e := FieldPlot(qry, fld, "", where, plotType, *runDetail.OutDir, fld, title, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
@@ -244,7 +263,7 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fd.ChSpec.Base.String())
 
-		if e := FieldPlot(*runDetail.Qry, fd.Name, "", where, plotType, *runDetail.OutDir, fd.Name, "",
+		if e := FieldPlot(*runDetail.Qry, fd.Name, "", where, plotType, *runDetail.OutDir, fd.Name, *runDetail.Title,
 			runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 			return e
 		}
@@ -283,7 +302,7 @@ func XY(runDetail *RunDef, conn *chutils.Connect) error {
 	where := fmt.Sprintf("%s AND %s", xWhere, yWhere)
 
 	outFile := fmt.Sprintf("%sVs%s", yField, xField)
-	if e := FieldPlot(*runDetail.Qry, xField, yField, where, "xy", *runDetail.OutDir, outFile, "",
+	if e := FieldPlot(*runDetail.Qry, xField, yField, where, "xy", *runDetail.OutDir, outFile, *runDetail.Title,
 		runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 		return e
 	}

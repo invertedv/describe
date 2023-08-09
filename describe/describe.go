@@ -61,6 +61,7 @@ func main() {
 	mD := flag.String("mD", "19700101", "string")
 	noMiss := flag.Bool("miss", false, "bool")
 	help := flag.Bool("h", false, "bool")
+	title := flag.String("title", null, "string")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -69,6 +70,9 @@ func main() {
 	maxGroupBy := flag.Int64("groupby", maxGroupByDef, "int64")
 
 	flag.Parse()
+	if *title != null {
+		runDetail.Title = title
+	}
 
 	if *help {
 		fmt.Println(helpString)
