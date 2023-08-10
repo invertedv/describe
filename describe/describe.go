@@ -264,5 +264,6 @@ func getValue(prompt string) string {
 func getPW(prompt string) string {
 	fmt.Print(prompt)
 	pass, _ := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
 	return string(pass)
 }
