@@ -35,15 +35,16 @@ func main() {
 	)
 
 	var (
-		conn *chutils.Connect
-		err  error
+		conn     *chutils.Connect
+		err      error
+		defTitle string
 	)
 
 	host := flag.String("host", "127.0.0.1", "string") // ClickHouse db
 	user := flag.String("user", null, "string")        // ClickHouse username
 	pw := flag.String("pw", null, "string")            // password for user
 
-	runDetail := &describe.RunDef{}
+	runDetail := &describe.RunDef{Title: &defTitle}
 
 	runDetail.Qry = flag.String("q", null, "string")
 	runDetail.Table = flag.String("t", null, "string")
