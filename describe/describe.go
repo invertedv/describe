@@ -35,16 +35,15 @@ func main() {
 	)
 
 	var (
-		conn     *chutils.Connect
-		err      error
-		defTitle string
+		conn *chutils.Connect
+		err  error
 	)
 
 	host := flag.String("host", "127.0.0.1", "string") // ClickHouse db
 	user := flag.String("user", null, "string")        // ClickHouse username
 	pw := flag.String("pw", null, "string")            // password for user
 
-	runDetail := &describe.RunDef{Title: &defTitle}
+	runDetail := &describe.RunDef{}
 
 	runDetail.Qry = flag.String("q", null, "string")
 	runDetail.Table = flag.String("t", null, "string")
@@ -63,7 +62,8 @@ func main() {
 	mD := flag.String("mD", "19700101", "string")
 	noMiss := flag.Bool("miss", false, "bool")
 	help := flag.Bool("h", false, "bool")
-	title := flag.String("title", null, "string")
+	runDetail.Title = flag.String("title", null, "string")
+	runDetail.SubTitle = flag.String("subtitle", null, "string")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -73,9 +73,9 @@ func main() {
 	threads := flag.Int64("threads", threadsDef, "int64")
 
 	flag.Parse()
-	if *title != null {
-		runDetail.Title = title
-	}
+	//	if *title != null {
+	//		runDetail.Title = title
+	//	}
 
 	if *help {
 		fmt.Println(helpString)
@@ -120,6 +120,14 @@ func main() {
 
 // parseFlags fully populates runDetail from the user input
 func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, maxGroupBy, threads *int64) (*chutils.Connect, error) {
+	if *runDetail.SubTitle == null {
+		*runDetail.SubTitle = ""
+	}
+
+	if *runDetail.Title == null {
+		*runDetail.Title = ""
+	}
+
 	// determine task
 	if runDetail.Markdown != nil && *runDetail.Qry == null && *runDetail.Table == null {
 		// just make markdown file

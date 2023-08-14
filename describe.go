@@ -52,7 +52,8 @@ type RunDef struct {
 	Table *string // table to pull data
 	XY    *string
 
-	Title *string
+	Title    *string
+	SubTitle *string
 
 	OutDir *string // directory for image files
 
@@ -74,7 +75,7 @@ type RunDef struct {
 //   - imageTypes. Type(s) of images to produce.
 //   - show. If true, push plot to browser.
 //   - conn. Connector to ClickHouse.
-func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title string, imageTypes []utilities.PlotlyImage,
+func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title, subtitle string, imageTypes []utilities.PlotlyImage,
 	show bool, conn *chutils.Connect) error {
 	var fig *grob.Fig
 
@@ -82,7 +83,7 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title stri
 		Show:       show,
 		Title:      "",
 		YTitle:     "",
-		STitle:     "",
+		STitle:     subtitle,
 		Legend:     false,
 		Height:     800,
 		Width:      1000,
@@ -92,7 +93,7 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title stri
 	}
 
 	// add where to query, subtitle
-	if where != "" {
+	if where != "" && subtitle == "" {
 		pd.STitle = fmt.Sprintf("%s WHERE %s", qry, where)
 		// note: single quotes screw up js
 		pd.STitle = strings.ReplaceAll(pd.STitle, "'", "`")
@@ -243,7 +244,7 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 			title = field
 		}
 
-		if e := FieldPlot(qry, fld, "", where, plotType, *runDetail.OutDir, fld, title, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		if e := FieldPlot(qry, fld, "", where, plotType, *runDetail.OutDir, fld, title, "", runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 			return e
 		}
 	}
@@ -264,7 +265,7 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fd.ChSpec.Base.String())
 
 		if e := FieldPlot(*runDetail.Qry, fd.Name, "", where, plotType, *runDetail.OutDir, fd.Name, *runDetail.Title,
-			runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+			*runDetail.SubTitle, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 			return e
 		}
 	}
@@ -303,7 +304,7 @@ func XY(runDetail *RunDef, conn *chutils.Connect) error {
 
 	outFile := fmt.Sprintf("%sVs%s", yField, xField)
 	if e := FieldPlot(*runDetail.Qry, xField, yField, where, "xy", *runDetail.OutDir, outFile, *runDetail.Title,
-		runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		*runDetail.SubTitle, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
 		return e
 	}
 
