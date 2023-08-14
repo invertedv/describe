@@ -45,15 +45,16 @@ func main() {
 
 	runDetail := &describe.RunDef{}
 
-	runDetail.Qry = flag.String("q", null, "string")
-	runDetail.Table = flag.String("t", null, "string")
+	qry := flag.String("q", null, "string")
+	table := flag.String("t", null, "string")
 
 	markDown := flag.String("markdown", null, "bool")
-	runDetail.OutDir = flag.String("d", null, "string")
+	outDir := flag.String("d", null, "string")
+	fileName := flag.String("f", null, "string")
 
-	runDetail.Show = flag.Bool("show", false, "bool")
-	runDetail.ImageTypes = flag.String("i", null, "string")
-	runDetail.XY = flag.String("xy", null, "bool")
+	show := flag.Bool("show", false, "bool")
+	imageTypes := flag.String("i", null, "string")
+	xy := flag.String("xy", null, "bool")
 
 	// values to recognize a field is missing
 	mI := flag.String("mI", "-1", "int64")
@@ -62,8 +63,10 @@ func main() {
 	mD := flag.String("mD", "19700101", "string")
 	noMiss := flag.Bool("miss", false, "bool")
 	help := flag.Bool("h", false, "bool")
-	runDetail.Title = flag.String("title", null, "string")
-	runDetail.SubTitle = flag.String("subtitle", null, "string")
+	title := flag.String("title", null, "string")
+	subTitle := flag.String("subtitle", null, "string")
+	lineType := flag.String("lineType", "m", "string")
+	color := flag.String("color", "black", "string")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -73,9 +76,11 @@ func main() {
 	threads := flag.Int64("threads", threadsDef, "int64")
 
 	flag.Parse()
-	//	if *title != null {
-	//		runDetail.Title = title
-	//	}
+
+	runDetail.Qry, runDetail.Table, runDetail.OutDir = toEmpty(qry), toEmpty(table), toEmpty(outDir)
+	runDetail.ImageTypes, runDetail.XY, runDetail.Title = toEmpty(imageTypes), toEmpty(xy), toEmpty(title)
+	runDetail.SubTitle, runDetail.LineType, runDetail.Show = toEmpty(subTitle), toEmpty(lineType), *show
+	runDetail.Color, runDetail.FileName = toEmpty(color), toEmpty(fileName)
 
 	if *help {
 		fmt.Println(helpString)
@@ -92,8 +97,7 @@ func main() {
 
 	utilities.Browser = *browser
 
-	if runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, runDetail.Markdown, err =
-		setMissing(mI, mF, mS, mD, markDown, *noMiss); err != nil {
+	if err = setMissing(mI, mF, mS, mD, markDown, *noMiss, runDetail); err != nil {
 		panic(err)
 	}
 
@@ -120,19 +124,10 @@ func main() {
 
 // parseFlags fully populates runDetail from the user input
 func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, maxGroupBy, threads *int64) (*chutils.Connect, error) {
-	if *runDetail.SubTitle == null {
-		*runDetail.SubTitle = ""
-	}
-
-	if *runDetail.Title == null {
-		*runDetail.Title = ""
-	}
-
 	// determine task
-	if runDetail.Markdown != nil && *runDetail.Qry == null && *runDetail.Table == null {
+	if runDetail.Markdown != "" && runDetail.Qry == "" && runDetail.Table == "" {
 		// just make markdown file
 		runDetail.Task = describe.TaskNone
-		runDetail.OutDir = checkNull(runDetail.OutDir)
 		return nil, nil
 	}
 
@@ -146,26 +141,26 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 		return nil, err
 	}
 
-	if *runDetail.Qry == null {
-		if *runDetail.Table == null {
+	if runDetail.Qry == "" {
+		if runDetail.Table == "" {
 			return nil, fmt.Errorf("both -q and -t cannot be omitted")
 		}
 
 		runDetail.Task = describe.TaskTable
 	}
 
-	if *runDetail.Qry != null {
-		if *runDetail.Table != null {
+	if runDetail.Qry != "" {
+		if runDetail.Table != "" {
 			return nil, fmt.Errorf("cannot have both -q and -t")
 		}
 
 		runDetail.Task = describe.TaskQuery
 
-		if *runDetail.XY != null {
+		if runDetail.XY != "" {
 			runDetail.Task = describe.TaskXY
 		}
 
-		rdr := s.NewReader(*runDetail.Qry, conn)
+		rdr := s.NewReader(runDetail.Qry, conn)
 		defer func() { _ = rdr.Close() }()
 
 		if e := rdr.Init("", chutils.MergeTree); e != nil {
@@ -176,8 +171,8 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 	}
 
 	// determine imageTypes
-	for _, img := range strings.Split(strings.ReplaceAll(*runDetail.ImageTypes, " ", ""), ",") {
-		if img == null {
+	for _, img := range strings.Split(strings.ReplaceAll(runDetail.ImageTypes, " ", ""), ",") {
+		if img == "" {
 			break
 		}
 
@@ -206,18 +201,18 @@ func parseFlags(runDetail *describe.RunDef, host, user, pw *string, maxMemory, m
 	// if no -d is specified, use current working directory
 	if runDetail.ImageTypesCh != nil {
 		// place in current working directory if not specified
-		if *runDetail.OutDir == null {
-			*runDetail.OutDir = "."
+		if runDetail.OutDir == "" {
+			runDetail.OutDir = "."
 		}
 	}
 
-	if *runDetail.OutDir != null && runDetail.ImageTypesCh == nil {
+	if runDetail.OutDir != "" && runDetail.ImageTypesCh == nil {
 		return nil, fmt.Errorf("must have -i if have -d")
 	}
 
 	// If there's no image type, then we must show to browser
 	if runDetail.ImageTypesCh == nil {
-		*runDetail.Show = true
+		runDetail.Show = true
 	}
 
 	return conn, nil
@@ -232,34 +227,35 @@ func checkNull(str *string) *string {
 }
 
 // setMissing sets up the missing values
-func setMissing(mI, mF, mS, mD, markDown *string, noMiss bool) (missInt, missFlt, missStr, missDt any, mark *string, err error) {
+func setMissing(mI, mF, mS, mD, markDown *string, noMiss bool, runDetail *describe.RunDef) error {
+	var err error
 	if noMiss {
-		return nil, nil, nil, nil, nil, nil
+		return nil
 	}
 
-	mI, mF, missStr, mD, mark = checkNull(mI), checkNull(mF), *checkNull(mS), checkNull(mD), checkNull(markDown)
+	mI, mF, runDetail.MissStr, mD, runDetail.Markdown = checkNull(mI), checkNull(mF), toEmpty(mS), checkNull(mD), toEmpty(markDown)
 
 	if mF != nil {
-		if missFlt, err = strconv.ParseFloat(*mF, 64); err != nil {
-			return nil, nil, nil, nil, nil, err
+		if runDetail.MissFlt, err = strconv.ParseFloat(*mF, 64); err != nil {
+			return err
 		}
 	}
 
 	if mI != nil {
-		if missInt, err = strconv.ParseInt(*mI, 10, 64); err != nil {
-			return nil, nil, nil, nil, nil, err
+		if runDetail.MissInt, err = strconv.ParseInt(*mI, 10, 64); err != nil {
+			return err
 		}
 	}
 
 	if mD != nil {
 		dt, e := utilities.Any2Date(*mD)
 		if e != nil {
-			return nil, nil, nil, nil, nil, err
+			return err
 		}
-		missDt = dt.Format("20060102")
+		runDetail.MissDt = dt.Format("20060102")
 	}
 
-	return missInt, missFlt, missStr, missDt, mark, nil
+	return nil
 }
 
 // getValue returns a value for the user
@@ -275,4 +271,12 @@ func getPW(prompt string) string {
 	pass, _ := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println()
 	return string(pass)
+}
+
+func toEmpty(inStr *string) string {
+	if inStr == nil || *inStr == null {
+		return ""
+	}
+
+	return *inStr
 }

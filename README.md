@@ -33,14 +33,19 @@ in the title of the plot.
 - -t \<db.table\>. Table name.
  
 #### Outputs
-- -xy <'xfield,yfield'>.  If this flag is used, an XY plot is created. The input must be a query.
-  The field names to plot are enclosed in quotes and are comma-separated.
+- -xy <'xField,yField1,..yFieldk'>.  If this flag is used, an XY plot is created. The input must be a query.
+  The field names to plot are enclosed in quotes and are comma-separated. This syntax works, too:
+    -  -xy <'field'> which plots 'field' against an index 0,1,2...
+    - -lineType 'm,l' line types for xy plots (m=marker, l=line)
+    - -color colors for xy plots (e.g. 'black' 'red',...)
+    - -f - Filename.  Optional root file name for output graphs (no extension )
 - -i \<image type\>. Image types.  One or more of: png, jpeg, html, pdf, webp, svg, eps, emf.  If none is specified, the plot(s) are sent
 to the browser.
 - -d - Directory.  Directory for output images. Defaults to the working directory.
 - -b \<browser\>. Browser for images. If omitted, the system default is used.
 - -show - If included, the plot is (also) sent to the browser. -show is assumed if -d and -i are omitted.
 - -title - If included, the plots are titled with this value.
+- -subtitle - Optional subtitle.
 - -threads - If included, maximum # of threads for ClickHouse to use.
  
  Images are placed in subdirectories of -d according to image type. For example, if you have

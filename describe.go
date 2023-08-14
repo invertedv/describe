@@ -44,24 +44,27 @@ const (
 type RunDef struct {
 	Task TaskType // the kind of task to run
 
-	Show         *bool                   // if true, send the plots to the browser
+	Show         bool                    // if true, send the plots to the browser
 	ImageTypesCh []utilities.PlotlyImage // type(s) of image files to create
 
 	// one of these two must be specified
-	Qry   *string // query to pull data
-	Table *string // table to pull data
-	XY    *string
+	Qry      string // query to pull data
+	Table    string // table to pull data
+	XY       string
+	LineType string
+	Color    string
 
-	Title    *string
-	SubTitle *string
+	Title    string
+	SubTitle string
 
-	OutDir *string // directory for image files
+	OutDir   string // directory for image files
+	FileName string
 
-	ImageTypes *string // types of images to create
+	ImageTypes string // types of images to create
 
 	MissStr, MissDt, MissInt, MissFlt any // values which indicate a field value is missing. Ignored if nil.
 
-	Markdown *string // if not nil, the name of a markdown file to create with the images in OutDir.
+	Markdown string // if not nil, the name of a markdown file to create with the images in OutDir.
 
 	Fds *chutils.TableDef // field defs of query results (not required if describing a table).
 }
@@ -75,26 +78,25 @@ type RunDef struct {
 //   - imageTypes. Type(s) of images to produce.
 //   - show. If true, push plot to browser.
 //   - conn. Connector to ClickHouse.
-func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title, subtitle string, imageTypes []utilities.PlotlyImage,
-	show bool, conn *chutils.Connect) error {
+func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string, conn *chutils.Connect) error {
 	var fig *grob.Fig
 
 	pd := &utilities.PlotDef{
-		Show:       show,
+		Show:       runDetail.Show,
 		Title:      "",
 		YTitle:     "",
-		STitle:     subtitle,
+		STitle:     runDetail.SubTitle,
 		Legend:     false,
 		Height:     800,
 		Width:      1000,
-		FileName:   outFile,
-		OutDir:     outDir,
-		ImageTypes: imageTypes,
+		FileName:   runDetail.FileName,
+		OutDir:     runDetail.OutDir,
+		ImageTypes: runDetail.ImageTypesCh,
 	}
 
 	// add where to query, subtitle
-	if where != "" && subtitle == "" {
-		pd.STitle = fmt.Sprintf("%s WHERE %s", qry, where)
+	if where != "" && runDetail.SubTitle == "" {
+		pd.STitle = fmt.Sprintf("%s WHERE %s", runDetail.Qry, where)
 		// note: single quotes screw up js
 		pd.STitle = strings.ReplaceAll(pd.STitle, "'", "`")
 	}
@@ -111,7 +113,7 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title, sub
 			err  error
 		)
 
-		if data, err = utilities.NewHistData(qry, xField, where, conn); err != nil {
+		if data, err = utilities.NewHistData(runDetail.Qry, xField, where, conn); err != nil {
 			return err
 		}
 
@@ -132,7 +134,7 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title, sub
 			err  error
 		)
 
-		if data, err = utilities.NewQuantileData(qry, xField, where, conn); err != nil {
+		if data, err = utilities.NewQuantileData(runDetail.Qry, xField, where, conn); err != nil {
 			return err
 		}
 
@@ -147,15 +149,18 @@ func FieldPlot(qry, xField, yField, where, plotType, outDir, outFile, title, sub
 			data *utilities.XYData
 			err  error
 		)
+		flds := strings.Split(runDetail.XY, ",")
+		xField = flds[0]
 
-		if data, err = utilities.NewXYData(qry, xField, yField, where, conn); err != nil {
+		if data, err = utilities.NewXYData(runDetail.Qry, where, runDetail.XY, runDetail.Color, runDetail.LineType, conn); err != nil {
 			return err
 		}
 		if title == "" {
-			title = fmt.Sprintf("XY plot of %s vs %s", xField, yField)
+			title = fmt.Sprintf("XY plot of %s vs %s", xField, strings.Join(flds[1:], ", "))
 		}
 
-		pd.XTitle, pd.YTitle, pd.Title = xField, yField, title
+		pd.XTitle, pd.YTitle, pd.Title, pd.Legend = xField, yField, title, len(flds) > 2
+		//fig = data.Fig
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
@@ -200,7 +205,7 @@ func getWhere(missInt, missFlt, missStr, missDt any, field, fType string) string
 // Table generates plots for all the fields in the table.
 func Table(runDetail *RunDef, conn *chutils.Connect) error {
 	// get data types
-	fTypes, err := chutils.GetSystemFields(conn, "type", *runDetail.Table)
+	fTypes, err := chutils.GetSystemFields(conn, "type", runDetail.Table)
 	if err != nil {
 		return err
 	}
@@ -224,27 +229,28 @@ func Table(runDetail *RunDef, conn *chutils.Connect) error {
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fld, fType)
 
-		qry := fmt.Sprintf("SELECT %s FROM %s", field, *runDetail.Table)
+		runDetail.Qry = fmt.Sprintf("SELECT %s FROM %s", field, runDetail.Table)
 
 		// If the field is an array, we need to do an arrayJoin
 		if strings.Contains(fType, "Array") {
-			qry = fmt.Sprintf("SELECT arrayJoin(%s) AS %s FROM %s", field, fld, *runDetail.Table)
+			runDetail.Qry = fmt.Sprintf("SELECT arrayJoin(%s) AS %s FROM %s", field, fld, runDetail.Table)
 		}
 
 		var title string
 		// add the comment to the title
-		comment, _ := chutils.GetSystemField(*runDetail.Table, "comment", field, conn)
+		comment, _ := chutils.GetSystemField(runDetail.Table, "comment", field, conn)
 
 		switch {
-		case *runDetail.Title != "":
-			title = *runDetail.Title
+		case runDetail.Title != "":
+			title = runDetail.Title
 		case comment != "":
 			title = fmt.Sprintf("%s: %s", title, comment)
 		default:
 			title = field
 		}
 
-		if e := FieldPlot(qry, fld, "", where, plotType, *runDetail.OutDir, fld, title, "", runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		runDetail.FileName = fld
+		if e := FieldPlot(runDetail, fld, "", where, plotType, title, conn); e != nil {
 			return e
 		}
 	}
@@ -264,8 +270,8 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 
 		where := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, fd.Name, fd.ChSpec.Base.String())
 
-		if e := FieldPlot(*runDetail.Qry, fd.Name, "", where, plotType, *runDetail.OutDir, fd.Name, *runDetail.Title,
-			*runDetail.SubTitle, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+		runDetail.FileName = fd.Name
+		if e := FieldPlot(runDetail, fd.Name, "", where, plotType, runDetail.Title, conn); e != nil {
 			return e
 		}
 	}
@@ -275,36 +281,33 @@ func Multiple(runDetail *RunDef, conn *chutils.Connect) error {
 
 // XY creates an XY graphs for a query
 func XY(runDetail *RunDef, conn *chutils.Connect) error {
-	flds := strings.SplitN(*runDetail.XY, ",", 2)
-	if len(flds) != 2 {
-		return fmt.Errorf("-XY must have two field names in quotes separated by a comma")
+	flds := strings.Split(runDetail.XY, ",")
+	where := ""
+
+	for _, fld := range flds {
+		var (
+			xFd *chutils.FieldDef
+			e   error
+		)
+		field := strings.Trim(fld, " ")
+		if _, xFd, e = runDetail.Fds.Get(field); e != nil {
+			return e
+		}
+
+		whr := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, field, xFd.ChSpec.Base.String())
+
+		if where == "" {
+			where = whr
+		} else {
+			where = fmt.Sprintf("%s AND %s", where, whr)
+		}
 	}
 
-	xField := strings.ReplaceAll(flds[0], " ", "")
-	yField := strings.ReplaceAll(flds[1], " ", "")
-
-	var (
-		xFd, yFd *chutils.FieldDef
-		e        error
-	)
-
-	if _, xFd, e = runDetail.Fds.Get(xField); e != nil {
-		return e
+	if runDetail.FileName == "" {
+		runDetail.FileName = fmt.Sprintf("%sVs%s", strings.Join(flds, "_"))
 	}
 
-	xWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, xField, xFd.ChSpec.Base.String())
-
-	if _, yFd, e = runDetail.Fds.Get(yField); e != nil {
-		return e
-	}
-
-	yWhere := getWhere(runDetail.MissInt, runDetail.MissFlt, runDetail.MissStr, runDetail.MissDt, yField, yFd.ChSpec.Base.String())
-
-	where := fmt.Sprintf("%s AND %s", xWhere, yWhere)
-
-	outFile := fmt.Sprintf("%sVs%s", yField, xField)
-	if e := FieldPlot(*runDetail.Qry, xField, yField, where, "xy", *runDetail.OutDir, outFile, *runDetail.Title,
-		*runDetail.SubTitle, runDetail.ImageTypesCh, *runDetail.Show, conn); e != nil {
+	if e := FieldPlot(runDetail, "", "", where, "xy", runDetail.Title, conn); e != nil {
 		return e
 	}
 
@@ -327,7 +330,7 @@ func Drive(runDetail *RunDef, conn *chutils.Connect) error {
 
 // Markdown creates a simple markdown file of the images in OutDir
 func Markdown(runDetail *RunDef) error {
-	if runDetail.Markdown == nil {
+	if runDetail.Markdown == "" {
 		return nil
 	}
 
@@ -340,7 +343,7 @@ func Markdown(runDetail *RunDef) error {
 		err    error
 	)
 
-	if mdFile, err = os.Create(*runDetail.Markdown); err != nil {
+	if mdFile, err = os.Create(runDetail.Markdown); err != nil {
 		return err
 	}
 	defer func() { _ = mdFile.Close() }()
@@ -348,22 +351,22 @@ func Markdown(runDetail *RunDef) error {
 	var outDir []os.DirEntry
 	var info os.FileInfo
 
-	if info, err = os.Stat(*runDetail.OutDir); err != nil {
+	if info, err = os.Stat(runDetail.OutDir); err != nil {
 		return err
 	}
 
 	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", *runDetail.OutDir)
+		return fmt.Errorf("%s is not a directory", runDetail.OutDir)
 	}
 
-	if outDir, err = os.ReadDir(*runDetail.OutDir); err != nil {
+	if outDir, err = os.ReadDir(runDetail.OutDir); err != nil {
 		return err
 	}
 
 	for _, fig := range outDir {
 		file := "png/"
-		if runDetail.OutDir != nil {
-			file = fmt.Sprintf("%s%s", utilities.Slash(*runDetail.OutDir), fig.Name())
+		if runDetail.OutDir != "" {
+			file = fmt.Sprintf("%s%s", utilities.Slash(runDetail.OutDir), fig.Name())
 		}
 		label, ext, _ := strings.Cut(fig.Name(), ".")
 

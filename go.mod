@@ -7,7 +7,7 @@ require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/invertedv/chutils v1.1.32
-	github.com/invertedv/utilities v0.1.27
+	github.com/invertedv/utilities v0.1.28
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 )
 
@@ -17,7 +17,7 @@ require (
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/invertedv/keyval v0.0.15 // indirect
+	github.com/invertedv/keyval v0.0.16 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/paulmach/orb v0.9.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect
