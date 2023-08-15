@@ -31,6 +31,8 @@ to the browser.
 - -title - If included, the plots are titled with this value.
 - -subtitle - Optional subtitle.
 - -threads - If included, maximum # of threads for ClickHouse to use.
+- -width - plot width (default 1000)
+- -height - plot heith (default 800)
 
  Images are placed in subdirectories of -d according to image type. For example, if you have
 

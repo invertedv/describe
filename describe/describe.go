@@ -67,6 +67,8 @@ func main() {
 	subTitle := flag.String("subtitle", null, "string")
 	lineType := flag.String("lineType", "m", "string")
 	color := flag.String("color", "black", "string")
+	height := flag.Int64("height", 800, "int64")
+	width := flag.Int64("width", 1000, "int64")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -81,6 +83,7 @@ func main() {
 	runDetail.ImageTypes, runDetail.XY, runDetail.Title = toEmpty(imageTypes), toEmpty(xy), toEmpty(title)
 	runDetail.SubTitle, runDetail.LineType, runDetail.Show = toEmpty(subTitle), toEmpty(lineType), *show
 	runDetail.Color, runDetail.FileName = toEmpty(color), toEmpty(fileName)
+	runDetail.Height, runDetail.Width = float64(*height), float64(*width)
 
 	if *help {
 		fmt.Println(helpString)

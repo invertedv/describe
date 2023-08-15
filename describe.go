@@ -57,6 +57,9 @@ type RunDef struct {
 	Title    string
 	SubTitle string
 
+	Width  float64
+	Height float64
+
 	OutDir   string // directory for image files
 	FileName string
 
@@ -87,8 +90,8 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 		YTitle:     "",
 		STitle:     runDetail.SubTitle,
 		Legend:     false,
-		Height:     800,
-		Width:      1000,
+		Height:     runDetail.Height,
+		Width:      runDetail.Width,
 		FileName:   runDetail.FileName,
 		OutDir:     runDetail.OutDir,
 		ImageTypes: runDetail.ImageTypesCh,
