@@ -51,6 +51,8 @@ github.com/invertedv/utilities v0.1.27 h1:i7mMqR+v2cVk9WkriKK6XJtkMCBJ3GXpTUYY7+
 github.com/invertedv/utilities v0.1.27/go.mod h1:NkD1GCcDpWERbGZrWeI2qTjkawCxmzYnxaRA6Wc1EnI=
 github.com/invertedv/utilities v0.1.28 h1:38HgYPujuIWaQKlxfSJ9gBXkSTrq0COfem9Imh+6Gl8=
 github.com/invertedv/utilities v0.1.28/go.mod h1:oWHbSaPnfqLzDfepW2iKys/nMMQgVhyQs5l4Db/shp0=
+github.com/invertedv/utilities v0.1.29 h1:q2CFBXFO9szWTuvFGH+vxk3fpX2oDsVAooAK1z/w5lc=
+github.com/invertedv/utilities v0.1.29/go.mod h1:oWHbSaPnfqLzDfepW2iKys/nMMQgVhyQs5l4Db/shp0=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/compress v1.13.6/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=

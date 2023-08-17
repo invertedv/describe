@@ -69,6 +69,10 @@ func main() {
 	color := flag.String("color", "black", "string")
 	height := flag.Int64("height", 800, "int64")
 	width := flag.Int64("width", 1000, "int64")
+	xlim := flag.String("xlim", null, "string")
+	ylim := flag.String("ylim", null, "string")
+	box := flag.Bool("box", false, "bool")
+	log := flag.Bool("log", false, "bool")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -83,7 +87,8 @@ func main() {
 	runDetail.ImageTypes, runDetail.XY, runDetail.Title = toEmpty(imageTypes), toEmpty(xy), toEmpty(title)
 	runDetail.SubTitle, runDetail.LineType, runDetail.Show = toEmpty(subTitle), toEmpty(lineType), *show
 	runDetail.Color, runDetail.FileName = toEmpty(color), toEmpty(fileName)
-	runDetail.Height, runDetail.Width = float64(*height), float64(*width)
+	runDetail.Height, runDetail.Width, runDetail.Box = float64(*height), float64(*width), *box
+	runDetail.Xlim, runDetail.Ylim, runDetail.Log = limits(xlim), limits(ylim), *log
 
 	if *help {
 		fmt.Println(helpString)
@@ -282,4 +287,33 @@ func toEmpty(inStr *string) string {
 	}
 
 	return *inStr
+}
+
+func limits(asStr *string) []float64 {
+	var (
+		min, max float64
+		err      error
+	)
+	if *asStr == null {
+		return nil
+	}
+
+	lims := strings.Split(*asStr, ",")
+	if len(lims) != 2 {
+		panic(fmt.Errorf("need two limits, max and min. Got %s", *asStr))
+	}
+
+	if min, err = strconv.ParseFloat(lims[0], 64); err != nil {
+		panic(err)
+	}
+
+	if max, err = strconv.ParseFloat(lims[1], 64); err != nil {
+		panic(err)
+	}
+
+	if min >= max {
+		panic(fmt.Errorf("max is not greater than min: %s", *asStr))
+	}
+
+	return []float64{min, max}
 }

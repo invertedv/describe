@@ -53,12 +53,17 @@ type RunDef struct {
 	XY       string
 	LineType string
 	Color    string
+	Box      bool
+	Log      bool
 
 	Title    string
 	SubTitle string
 
 	Width  float64
 	Height float64
+
+	Xlim []float64
+	Ylim []float64
 
 	OutDir   string // directory for image files
 	FileName string
@@ -155,21 +160,35 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 		flds := strings.Split(runDetail.XY, ",")
 		xField = flds[0]
 
-		if data, err = utilities.NewXYData(runDetail.Qry, where, runDetail.XY, runDetail.Color, runDetail.LineType, conn); err != nil {
+		if data, err = utilities.NewXYData(runDetail.Qry, where, runDetail.XY,
+			runDetail.Color, runDetail.LineType, runDetail.Box, conn); err != nil {
 			return err
 		}
+
 		if title == "" {
 			title = fmt.Sprintf("XY plot of %s vs %s", xField, strings.Join(flds[1:], ", "))
 		}
 
 		pd.XTitle, pd.YTitle, pd.Title, pd.Legend = xField, yField, title, len(flds) > 2
-		//fig = data.Fig
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
 	}
 
-	if e := utilities.Plotter(fig, nil, pd); e != nil {
+	lay := &grob.Layout{Yaxis: &grob.LayoutYaxis{}} //  &grob.Layout{Yaxis: &grob.LayoutYaxis{Range: []float32{0, .02}}}
+	if runDetail.Xlim != nil {
+		lay.Xaxis = &grob.LayoutXaxis{Range: runDetail.Xlim}
+	}
+
+	if runDetail.Ylim != nil {
+		lay.Yaxis.Range = runDetail.Ylim
+	}
+
+	if runDetail.Log {
+		lay.Yaxis.Type = "log"
+	}
+
+	if e := utilities.Plotter(fig, lay, pd); e != nil {
 		return e
 	}
 
