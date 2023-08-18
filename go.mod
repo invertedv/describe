@@ -7,7 +7,7 @@ require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/invertedv/chutils v1.1.32
-	github.com/invertedv/utilities v0.1.29
+	github.com/invertedv/utilities v0.1.30
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 )
 

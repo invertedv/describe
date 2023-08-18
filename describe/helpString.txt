@@ -20,10 +20,9 @@ in the title of the plot.
 - -xy <'xField,yField1,..yFieldk'>.  If this flag is used, an XY plot is created. The input must be a query.
   The field names to plot are enclosed in quotes and are comma-separated. This syntax works, too:
     -  -xy <'field'> which plots 'field' against an index 0,1,2...
-    - -lineType 'm,l' line types for xy plots (m=marker, l=line)
+    - -lineType 'm,l' line types for xy plots (m=marker, l=line, b=boxplot)
     - -color colors for xy plots (e.g. 'black' 'red',...)
     - -f - Filename.  Optional root file name for output graphs (no extension )
-    - -box Do boxplots.
 - -i \<image type\>. Image types.  One or more of: png, jpeg, html, pdf, webp, svg, eps, emf.  If none is specified, the plot(s) are sent
 to the browser.
 - -d - Directory.  Directory for output images. Defaults to the working directory.

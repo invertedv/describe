@@ -161,23 +161,25 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 		xField = flds[0]
 
 		if data, err = utilities.NewXYData(runDetail.Qry, where, runDetail.XY,
-			runDetail.Color, runDetail.LineType, runDetail.Box, conn); err != nil {
+			runDetail.Color, runDetail.LineType, conn); err != nil {
 			return err
 		}
 
 		if title == "" {
 			title = fmt.Sprintf("XY plot of %s vs %s", xField, strings.Join(flds[1:], ", "))
 		}
-
-		pd.XTitle, pd.YTitle, pd.Title, pd.Legend = xField, yField, title, len(flds) > 2
+		pd.XTitle, pd.YTitle, pd.Title, pd.Legend = flds[0], strings.Join(flds[1:], ","), title, len(flds) > 2
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
 	}
 
-	lay := &grob.Layout{Yaxis: &grob.LayoutYaxis{}} //  &grob.Layout{Yaxis: &grob.LayoutYaxis{Range: []float32{0, .02}}}
+	yAxis := &grob.LayoutYaxis{Title: &grob.LayoutYaxisTitle{Text: pd.YTitle}}
+	xAxis := &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: pd.XTitle}}
+	lay := &grob.Layout{Yaxis: yAxis, Xaxis: xAxis}
+
 	if runDetail.Xlim != nil {
-		lay.Xaxis = &grob.LayoutXaxis{Range: runDetail.Xlim}
+		lay.Xaxis.Range = runDetail.Xlim
 	}
 
 	if runDetail.Ylim != nil {
@@ -187,6 +189,9 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 	if runDetail.Log {
 		lay.Yaxis.Type = "log"
 	}
+
+	lay.Boxmode = "group"
+	lay.Barmode = "group"
 
 	if e := utilities.Plotter(fig, lay, pd); e != nil {
 		return e
