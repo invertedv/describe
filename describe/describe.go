@@ -298,7 +298,7 @@ func limits(asStr *string) []float64 {
 		return nil
 	}
 
-	lims := strings.Split(*asStr, ",")
+	lims := strings.Split(strings.ReplaceAll(*asStr, " ", ""), ",")
 	if len(lims) != 2 {
 		panic(fmt.Errorf("need two limits, max and min. Got %s", *asStr))
 	}
