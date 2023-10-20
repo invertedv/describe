@@ -58,6 +58,8 @@ type RunDef struct {
 
 	Title    string
 	SubTitle string
+	Xlab     string
+	Ylab     string
 
 	Width  float64
 	Height float64
@@ -91,8 +93,9 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 
 	pd := &utilities.PlotDef{
 		Show:       runDetail.Show,
-		Title:      "",
-		YTitle:     "",
+		Title:      runDetail.Title,
+		XTitle:     runDetail.Xlab,
+		YTitle:     runDetail.Ylab,
 		STitle:     runDetail.SubTitle,
 		Legend:     false,
 		Height:     runDetail.Height,
@@ -134,7 +137,15 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 			title = fmt.Sprintf("Histogram of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
 		}
 
-		pd.XTitle, pd.YTitle, pd.Title = "Level", "Proportion", title
+		if pd.XTitle == "" {
+			pd.XTitle = "Level"
+		}
+
+		if pd.YTitle == "" {
+			pd.YTitle = "Proportion"
+		}
+
+		pd.Title = title
 		fig = data.Fig
 	case quantile:
 		var (
@@ -150,7 +161,15 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 			title = fmt.Sprintf("Quantile of %s<br>n: %s", pdTitle, humanize.Comma(data.Total))
 		}
 
-		pd.XTitle, pd.YTitle, pd.Title = "u", xField, title
+		if pd.XTitle == "" {
+			pd.XTitle = "u"
+		}
+
+		if pd.YTitle == "" {
+			pd.YTitle = xField
+		}
+
+		pd.Title = title
 		fig = data.Fig
 	case xy:
 		var (
@@ -168,15 +187,24 @@ func FieldPlot(runDetail *RunDef, xField, yField, where, plotType, title string,
 		if title == "" {
 			title = fmt.Sprintf("XY plot of %s vs %s", xField, strings.Join(flds[1:], ", "))
 		}
-		pd.XTitle, pd.YTitle, pd.Title, pd.Legend = flds[0], strings.Join(flds[1:], ","), title, len(flds) > 2
+
+		if pd.XTitle == "" {
+			pd.XTitle = flds[0]
+		}
+
+		if pd.YTitle == "" {
+			pd.YTitle = strings.Join(flds[1:], ",")
+		}
+
+		pd.Title, pd.Legend = title, len(flds) > 2
 		fig = data.Fig
 	default:
 		return fmt.Errorf("unsupported plotType: %s, must be histogram or quantile", plotType)
 	}
 
-	yAxis := &grob.LayoutYaxis{Title: &grob.LayoutYaxisTitle{Text: pd.YTitle}}
-	xAxis := &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: pd.XTitle}}
-	lay := &grob.Layout{Yaxis: yAxis, Xaxis: xAxis}
+	//	yAxis := &grob.LayoutYaxis{Title: &grob.LayoutYaxisTitle{Text: pd.YTitle}}
+	//	xAxis := &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: pd.XTitle}}
+	lay := &grob.Layout{Yaxis: &grob.LayoutYaxis{}, Xaxis: &grob.LayoutXaxis{}}
 
 	if runDetail.Xlim != nil {
 		lay.Xaxis.Range = runDetail.Xlim

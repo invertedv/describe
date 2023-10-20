@@ -73,6 +73,8 @@ func main() {
 	ylim := flag.String("ylim", null, "string")
 	box := flag.Bool("box", false, "bool")
 	log := flag.Bool("log", false, "bool")
+	xlab := flag.String("xlab", null, "string")
+	ylab := flag.String("ylab", null, "string")
 
 	browser := flag.String("b", "xdg-open", "string")
 
@@ -89,6 +91,7 @@ func main() {
 	runDetail.Color, runDetail.FileName = toEmpty(color), toEmpty(fileName)
 	runDetail.Height, runDetail.Width, runDetail.Box = float64(*height), float64(*width), *box
 	runDetail.Xlim, runDetail.Ylim, runDetail.Log = limits(xlim), limits(ylim), *log
+	runDetail.Xlab, runDetail.Ylab = toEmpty(xlab), toEmpty(ylab)
 
 	if *help {
 		fmt.Println(helpString)
